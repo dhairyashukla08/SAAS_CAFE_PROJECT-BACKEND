@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 const orderSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: "Client", required: true, index: true },
   tableNumber: { type: String, required: true },
   items: [
     {

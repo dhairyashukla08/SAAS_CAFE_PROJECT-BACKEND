@@ -34,3 +34,18 @@ export const authorize = (...roles) => {
     next();
   };
 };
+
+
+export const isSuperAdmin = async (req, res, next) => {
+  try {
+    if (req.user && req.user.role === 'superadmin') {
+      next();
+    } else {
+      return res.status(403).json({ 
+        message: "Access Denied: Requires SuperAdmin Privileges" 
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};

@@ -13,17 +13,18 @@ import couponRoutes from "./routes/coupon-routes.js";
 import analyticsRoutes from "./routes/analytics-routes.js";
 import settingsRoutes from "./routes/settings-routes.js";
 import tableRoutes from "./routes/table-routes.js";
+import superAdminRoutes from "./routes/super-admin-routes.js";
 
 import dotenv from "dotenv";
 import http from "http";
 import { Server } from "socket.io";
 dotenv.config();
 
-export const redisClient=createClient({
-  url:process.env.REDIS_URL || 'redis://localhost:6379'
+export const redisClient = createClient({
+  url: process.env.REDIS_URL || "redis://localhost:6379",
 });
-redisClient.on('error',(err)=>console.log('Redis Client Error',err));
-(async()=>{
+redisClient.on("error", (err) => console.log("Redis Client Error", err));
+(async () => {
   try {
     await redisClient.connect();
     console.log("Connected to Redis");
@@ -37,19 +38,21 @@ const app = express();
 app.use(helmet());
 app.use(compression());
 
-app.use(cors({
-  origin: "http://localhost:5173",
-  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-  credentials: true,
-}));
-const limiter=rateLimit({
-  windowMs:15*60*1000,
-  max:100,
-  standardHeaders:true,
-  legacyHeaders:false,
-  message:"Too many requests, please try again later."
-})
-app.use("/api/",limiter);
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+  }),
+);
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many requests, please try again later.",
+});
+app.use("/api/", limiter);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
@@ -63,17 +66,22 @@ const io = new Server(server, {
 app.set("socketio", io);
 io.on("connection", (socket) => {
   console.log(`User Connected: ${socket.id}`);
-  socket.on("join_admin_room", () => {
-    socket.join("admin_room");
-    console.log("Admin joined the notification room");
+  socket.on("join_admin_room", ({ tenantId }) => {
+    if (tenantId) {
+      const roomName = `admin_${tenantId}`;
+      socket.join(roomName);
+      console.log(`Admin joined room: ${roomName}`);
+    }
   });
-  socket.on("disconnect", () => {
+
+  socket.on("join_order_room", (orderId) => {
+    socket.join(orderId);
+    console.log(`User joined room for order: ${orderId}`);
+  });
+
+   socket.on("disconnect", () => {
     console.log("User Disconnected", socket.id);
   });
-  socket.on("join_order_room", (orderId) => {
-  socket.join(orderId);
-  console.log(`User joined room for order: ${orderId}`);
-});
 });
 app.use((req, res, next) => {
   req.io = io;
@@ -84,9 +92,10 @@ app.use("/api/auth", authRoutes);
 app.use("/api/menu", menuRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/coupons", couponRoutes);
-app.use("/api/analytics",analyticsRoutes);
-app.use("/api/settings",settingsRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/settings", settingsRoutes);
 app.use("/api/tables", tableRoutes);
+app.use("/api/super-admin", superAdminRoutes);
 
 mongoose
   .connect(process.env.MONGO_URL)

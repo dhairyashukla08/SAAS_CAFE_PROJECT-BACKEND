@@ -1,16 +1,16 @@
 import Coupon from "../models/Coupon.js";
 import { redisClient } from "../index.js";
 
-const clearCouponCache = async () => {
+const clearCouponCache = async (tenantId) => {
   if (redisClient.isOpen) {
-    const keys = await redisClient.keys('coupons:*');
+  const keys = await redisClient.keys(`coupons:${tenantId}:*`);
     if (keys.length > 0) await redisClient.del(keys);
   }
 };
 
 export const getAllCoupons = async (req, res) => {
   try {
-    const coupons = await Coupon.find().sort({ createdAt: -1 }).lean();
+    const coupons = await Coupon.find({ tenantId: req.user.tenantId }).sort({ createdAt: -1 }).lean();
     return res.json(coupons);
   } catch (err) {
    return  res.status(500).json({ message: err.message });
@@ -19,11 +19,12 @@ export const getAllCoupons = async (req, res) => {
 
 export const createCoupon = async (req, res) => {
   try {
-    const newCoupon = new Coupon(req.body);
+    const { tenantId } = req.user;
+    const newCoupon = new Coupon({ ...req.body, tenantId });
     await newCoupon.save();
-    await clearCouponCache();
-    if (req.io) {
-      req.io.emit("new_coupon_alert", {
+    await clearCouponCache(tenantId);
+   if (req.io) {
+      req.io.to(`cafe_${tenantId}`).emit("new_coupon_alert", {
         code: newCoupon.code,
         discount: newCoupon.discountValue,
         message: "Early birds only! Redemptions are limited."
@@ -36,10 +37,10 @@ export const createCoupon = async (req, res) => {
 };
 
 export const validateCoupon = async (req, res) => {
-  const { code } = req.body;
-  if (!code) return res.status(400).json({ message: "Code is required" });
+ const { code, tenantId } = req.body;
+  if (!code || !tenantId) return res.status(400).json({ message: "Code and Cafe ID are required" });
   const upperCode = code.toUpperCase();
-  const cacheKey = `coupons:val:${upperCode}`;
+ const cacheKey = `coupons:${tenantId}:val:${upperCode}`;
   try {
 
    if (redisClient.isOpen) {
@@ -54,7 +55,7 @@ export const validateCoupon = async (req, res) => {
         return res.json({ discountValue: couponData.discountValue });
       }
     }
-    const coupon = await Coupon.findOne({ code: upperCode }).lean();
+    const coupon = await Coupon.findOne({ code: upperCode, tenantId }).lean();
 
     if (!coupon) {
       return res.status(404).json({ message: "Invalid coupon code" });
@@ -77,8 +78,10 @@ export const validateCoupon = async (req, res) => {
 
 export const deleteCoupon = async (req, res) => {
   try {
-    await Coupon.findByIdAndDelete(req.params.id);
-    await clearCouponCache();
+    const { tenantId } = req.user;
+   const deleted = await Coupon.findOneAndDelete({ _id: req.params.id, tenantId });
+   if (!deleted) return res.status(404).json({ message: "Coupon not found" });
+    await clearCouponCache(tenantId);
     return res.json({ message: "Coupon deleted" });
   } catch (error) {
     return res.status(500).json({ message: "Error deleting coupon" });

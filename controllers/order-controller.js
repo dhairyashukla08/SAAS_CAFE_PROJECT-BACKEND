@@ -5,8 +5,8 @@ import { calculateDistance } from "../utils/distance.js";
 
 export const placeOrder = async (req, res) => {
   try {
-    const { tableNumber, items, totalAmount,couponUsed ,userLat,userLon} = req.body;
-    const config = await Settings.findOne();
+    const { tenantId,tableNumber, items, totalAmount,couponUsed ,userLat,userLon} = req.body;
+    const config = await Settings.findOne({ tenantId });
     if(config){
       if(!config.paymentEnabled){
         return res.status(403).json({ message: "Ordering is currently paused by the cafe." });
@@ -29,6 +29,7 @@ export const placeOrder = async (req, res) => {
       }
     }
     const newOrder = new Order({
+      tenantId,
       tableNumber,
       items,
       totalAmount,
@@ -37,13 +38,13 @@ export const placeOrder = async (req, res) => {
     const tasks = [newOrder.save()];
    if (couponUsed) {
       tasks.push(Coupon.findOneAndUpdate(
-        { code: couponUsed }, 
+        { code: couponUsed, tenantId: tenantId },
         { $inc: { usedCount: 1 } }
       ));
     }
     const [savedOrder] = await Promise.all(tasks);
     if (req.io) {
-      req.io.to("admin_room").emit("new_order", savedOrder);
+      req.io.to(`admin_${tenantId}`).emit("new_order", savedOrder);
     }
    return  res
       .status(201)
@@ -58,6 +59,7 @@ export const placeOrder = async (req, res) => {
 export const getActiveOrders = async (req, res) => {
   try {
     const orders = await Order.find({
+      tenantId: req.user.tenantId,
       status: { $in: ["Pending", "Preparing"] },
     }).sort({ createdAt: -1 }).lean();;
    return  res.status(200).json(orders);
@@ -72,19 +74,20 @@ export const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const { tenantId } = req.user;
 
     const updatedOrder = await Order.findByIdAndUpdate(
-      id,
+      { _id: id, tenantId: tenantId },
       { status },
       { new: true },
     ).lean();
-    if (!updatedOrder) return res.status(404).json({ message: "Order not found" });
+  if (!updatedOrder) return res.status(404).json({ message: "Order not found or unauthorized" });
     if (req.io) {
       req.io.to(id).emit("order_status_updated", {
         orderId: id,
         status: updatedOrder.status
       });
-      req.io.to("admin_room").emit("admin_order_updated", updatedOrder);
+      req.io.to(`admin_${tenantId}`).emit("admin_order_updated", updatedOrder);
     }
 
     return res.status(200).json(updatedOrder);
@@ -97,9 +100,10 @@ export const updateOrderStatus = async (req, res) => {
 
 export const getOrderHistory = async (req, res) => {
   try {
-    // Fetch orders from the last 24 hours that are finished
+    const { tenantId } = req.user;
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const history = await Order.find({
+      tenantId: tenantId,
       status: { $in: ["Served", "Completed"] },
       createdAt: { $gte: yesterday }
     }).sort({ createdAt: -1 }).limit(50).lean();

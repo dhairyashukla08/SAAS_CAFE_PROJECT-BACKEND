@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 const menuItemSchema = new mongoose.Schema(
   {
+    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: "Client", required: true, index: true },
     name: { type: String, required: true, trim: true },
     description: { type: String, required: true },
     image: { type: String, required: true },
