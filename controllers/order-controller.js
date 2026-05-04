@@ -113,3 +113,23 @@ export const getOrderHistory = async (req, res) => {
     return res.status(500).json({ message: "Error fetching history", error: error.message });
   }
 };
+
+
+export const getMyOrders = async (req, res) => {
+  try {
+    const { tenantId, tableNumber } = req.query;
+    if (!tenantId || !tableNumber) {
+      return res.status(400).json({ message: "tenantId and tableNumber required" });
+    }
+    const since = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const orders = await Order.find({
+      tenantId,
+      tableNumber,
+      createdAt: { $gte: since },
+    }).sort({ createdAt: -1 }).lean();
+
+    return res.status(200).json(orders);
+  } catch (error) {
+    return res.status(500).json({ message: "Error fetching orders", error: error.message });
+  }
+};

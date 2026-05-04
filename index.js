@@ -35,16 +35,22 @@ redisClient.on("error", (err) => console.log("Redis Client Error", err));
 
 const app = express();
 
-app.use(helmet());
-app.use(compression());
+
 
 app.use(
   cors({
     origin: "http://localhost:5173",
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
+    preflightContinue: false, 
+    optionsSuccessStatus: 204, 
   }),
 );
+
+app.use(helmet());
+app.use(compression());
+
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -59,8 +65,8 @@ app.use(express.urlencoded({ limit: "10mb", extended: true }));
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST", "PATCH"],
+   origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   },
 });
 app.set("socketio", io);

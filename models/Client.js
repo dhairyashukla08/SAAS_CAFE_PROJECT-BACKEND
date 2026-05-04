@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const clientSchema = new mongoose.Schema({
   cafeName: { type: String, required: true },
-  adminUser: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  admins: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   subscriptionStatus: { 
     type: String, 
     enum: ["active", "expired", "trial", "suspended"], 

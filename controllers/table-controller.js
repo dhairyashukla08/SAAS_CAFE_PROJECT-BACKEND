@@ -1,5 +1,6 @@
 import Table from "../models/Table.js";
 import Client from "../models/Client.js";
+import Settings from "../models/Settings.js";
 
 export const getAllTables = async (req, res) => {
   try {
@@ -11,11 +12,25 @@ export const getAllTables = async (req, res) => {
 };
 
 export const addTable = async (req, res) => {
-  const table = new Table({ tableNumber: req.body.tableNumber,tenantId: req.user.tenantId });
-  try {
+   try {
+
+  const settings = await Settings.findOne({ tenantId: req.user.tenantId });
+  const maxTables = settings?.numberOfTables || 10;
+
+  const currentCount = await Table.countDocuments({ tenantId: req.user.tenantId });
+    if (currentCount >= maxTables) {
+      return res.status(400).json({ 
+        message: `Table limit reached. You can only have ${maxTables} tables. Update your limit in Settings.` 
+      });
+    }
+
+  const table = new Table({ tableNumber: req.body.tableNumber, tenantId: req.user.tenantId });
+
     const newTable = await table.save();
     res.status(201).json(newTable);
+
   } catch (err) {
+
     res.status(400).json({ message: "Table number already exists for your cafe" });
   }
 };
